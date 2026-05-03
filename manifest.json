@@ -1,6 +1,6 @@
 {
   "name": "DeLaval SJA",
-  "short_name": "SJA",
+  "short_name": "DeLaval SJA",
   "description": "Hurtig SJA-app for utfylling, arkiv og rapport på telefon.",
   "lang": "no",
   "start_url": "./index.html",
