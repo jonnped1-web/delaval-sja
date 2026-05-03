@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>DeLaval SJA</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div>
+        <div class="app-title">DeLaval SJA</div>
+        <div id="topSubtitle" class="app-subtitle">Hurtig SJA</div>
+      </div>
+      <button id="settingsBtn" class="icon-btn" type="button" aria-label="Innstillingar">⚙</button>
+    </header>
+
+    <main id="main">
+      <section id="screen-home" class="screen active">
+        <div class="card hero-card">
+          <h1>Hurtig SJA</h1>
+          <p>Fyll ut SJA raskt på telefonen. Alt blir lagra lokalt på denne eininga.</p>
+          <button class="btn primary big" type="button" data-go="sja">Ny SJA</button>
+          <button class="btn secondary small-action" type="button" data-go="incident">+ Skade / hendelse</button>
+        </div>
+
+        <div class="grid two">
+          <button class="shortcut" type="button" data-go="archive">Arkiv</button>
+          <button class="shortcut" type="button" data-go="report">Rapport</button>
+          <button class="shortcut" type="button" data-go="customers">Kundar</button>
+          <button class="shortcut" type="button" data-go="settings">Innstillingar</button>
+        </div>
+
+        <div class="card compact">
+          <div class="line-row">
+            <span>Denne månaden</span>
+            <strong id="homeMonthCount">0 SJA</strong>
+          </div>
+          <div class="line-row muted">
+            <span>Skadelogg</span>
+            <strong id="homeIncidentCount">0</strong>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-sja" class="screen">
+        <div class="sticky-status card compact">
+          <div class="line-row">
+            <strong id="sjaProgress">Utfylt: 0 / 18</strong>
+            <span id="sjaActionStatus" class="pill neutral">Tiltak: 0</span>
+          </div>
+          <div class="sja-meta-line">
+            <span id="sjaDateLabel"></span>
+            <span class="meta-dot">•</span>
+            <span id="sjaMontorLabel"></span>
+          </div>
+          <input id="sjaDate" class="hidden-field" type="date" />
+        </div>
+
+        <div class="card form-card">
+          <label for="sjaCustomer">Kunde</label>
+          <input id="sjaCustomer" type="text" autocomplete="off" placeholder="Start å skrive kundenamn..." />
+          <div id="customerSuggestions" class="suggestions"></div>
+
+          <label for="sjaTaskSelect">Arbeidsoppgåve</label>
+          <select id="sjaTaskSelect"></select>
+          <label class="small-label" for="sjaTaskExtra">Tillegg</label>
+          <input id="sjaTaskExtra" type="text" placeholder="Kort tillegg, valfritt..." />
+        </div>
+
+        <div id="questionList" class="question-list"></div>
+
+        <div id="sjaFinalStatus" class="final-status hidden"></div>
+
+        <div class="save-panel">
+          <button id="saveSjaBtn" class="btn primary big" type="button" disabled>Lagre og ny SJA</button>
+          <div id="saveHint" class="hint">Svar på alle punkt før lagring.</div>
+        </div>
+      </section>
+
+      <section id="screen-customers" class="screen">
+        <div class="card">
+          <h2>Kundar</h2>
+          <div class="inline-form">
+            <input id="newCustomerInput" type="text" placeholder="Nytt kundenamn" />
+            <button id="addCustomerBtn" class="btn primary" type="button">Legg til</button>
+          </div>
+        </div>
+        <div class="card compact">
+          <input id="customerSearch" type="text" placeholder="Søk kunde..." />
+        </div>
+
+        <div id="customerEditor" class="card hidden">
+          <h3>Kundekort</h3>
+          <input id="customerEditId" type="hidden" />
+          <label for="customerEditName">Kundenamn</label>
+          <input id="customerEditName" type="text" placeholder="Kundenamn" />
+          <label for="customerEditAddress">Adresse / stad</label>
+          <input id="customerEditAddress" type="text" placeholder="Adresse / stad, valfritt" />
+          <label for="customerEditPhone">Telefon</label>
+          <input id="customerEditPhone" type="tel" placeholder="Telefonnummer, valfritt" />
+          <div class="button-row customer-actions">
+            <button id="saveCustomerCardBtn" class="btn primary" type="button">Lagre kunde</button>
+            <button id="deleteCustomerCardBtn" class="btn danger" type="button">Slett</button>
+          </div>
+        </div>
+
+        <div id="customerList" class="list"></div>
+      </section>
+
+      <section id="screen-archive" class="screen">
+        <div class="card">
+          <h2>Arkiv</h2>
+          <div class="segmented">
+            <button id="archiveSjaTab" class="active" type="button">SJA</button>
+            <button id="archiveIncidentTab" type="button">Skadelogg</button>
+          </div>
+        </div>
+
+        <div id="archiveSjaPanel">
+          <div class="card compact">
+            <div class="archive-filter-row">
+              <div>
+                <label for="archiveFilter">Vis SJA</label>
+                <select id="archiveFilter">
+                  <option value="thisMonth">Denne månaden</option>
+                  <option value="prevMonth">Førre månad</option>
+                  <option value="month">Vel månad</option>
+                  <option value="year">Vel år</option>
+                  <option value="all">Alle</option>
+                </select>
+              </div>
+              <button id="toggleSjaCleanupBtn" class="btn secondary mini" type="button">Rydd</button>
+            </div>
+            <div id="archiveMonthWrap" class="filter-extra">
+              <label for="archiveMonth">Månad</label>
+              <input id="archiveMonth" type="month" />
+            </div>
+            <div id="archiveYearWrap" class="filter-extra">
+              <label for="archiveYear">År</label>
+              <input id="archiveYear" type="number" min="2000" max="2100" />
+            </div>
+            <label for="archiveSearch">Søk</label>
+            <input id="archiveSearch" type="text" placeholder="Kunde, arbeidsoppgåve eller montør" />
+          </div>
+
+          <div id="sjaCleanupPanel" class="card compact danger-soft hidden">
+            <div class="line-row">
+              <span>Slett viste SJA</span>
+              <button id="deleteVisibleSjaBtn" class="btn danger mini" type="button">Slett viste</button>
+            </div>
+            <div class="inline-form year-delete">
+              <input id="deleteYearInput" type="number" min="2000" max="2100" placeholder="År, f.eks. 2026" />
+              <button id="deleteYearBtn" class="btn danger" type="button">Slett år</button>
+            </div>
+          </div>
+
+          <div id="archiveList" class="list"></div>
+        </div>
+
+        <div id="archiveIncidentPanel" class="hidden">
+          <div class="card compact">
+            <label for="incidentSearch">Søk skadelogg</label>
+            <input id="incidentSearch" type="text" placeholder="Søk kunde/stad eller notat" />
+          </div>
+          <div class="card compact danger-soft">
+            <button id="deleteAllIncidentsBtn" class="btn danger" type="button">Slett alle skadeloggar</button>
+          </div>
+          <div id="incidentArchiveList" class="list"></div>
+        </div>
+      </section>
+
+      <section id="screen-report" class="screen">
+        <div class="card">
+          <h2>Rapport</h2>
+          <label for="reportType">Rapporttype</label>
+          <select id="reportType">
+            <option value="day">Dag</option>
+            <option value="week" selected>Veke</option>
+            <option value="month">Månad</option>
+          </select>
+
+          <div id="reportDayWrap" class="report-period-wrap hidden">
+            <label for="reportDate">Dato</label>
+            <input id="reportDate" type="date" />
+          </div>
+
+          <div id="reportWeekWrap" class="report-period-wrap">
+            <label for="reportWeek">Veke</label>
+            <input id="reportWeek" type="week" />
+          </div>
+
+          <div id="reportMonthWrap" class="report-period-wrap hidden">
+            <label for="reportMonth">Månad</label>
+            <input id="reportMonth" type="month" />
+          </div>
+
+          <div class="button-row wrap">
+            <button id="showSimpleReportBtn" class="btn primary" type="button">Vis rapport</button>
+            <button id="printSimpleReportBtn" class="btn secondary" type="button">PDF enkel</button>
+            <button id="printFullReportBtn" class="btn secondary" type="button">PDF full sjekkliste</button>
+          </div>
+        </div>
+        <div id="reportPreview" class="report-preview card"></div>
+      </section>
+
+      <section id="screen-settings" class="screen">
+        <div class="card">
+          <h2>Innstillingar</h2>
+          <label for="settingsMontor">Montørnamn</label>
+          <input id="settingsMontor" type="text" placeholder="Ditt namn" />
+          <button id="saveSettingsBtn" class="btn primary" type="button">Lagre innstillingar</button>
+        </div>
+
+        <div class="card">
+          <h2>Arbeidsoppgåver</h2>
+          <p class="muted">Desse valga visast i rullegardina på Ny SJA.</p>
+          <div class="inline-form">
+            <input id="newTaskOptionInput" type="text" placeholder="Ny arbeidsoppgåve" />
+            <button id="addTaskOptionBtn" class="btn primary" type="button">Legg til</button>
+          </div>
+          <div id="taskOptionsList" class="list task-options-list"></div>
+          <button id="resetTaskOptionsBtn" class="btn secondary" type="button">Nullstill standardvalg</button>
+        </div>
+
+        <div class="card">
+          <h2>Backup</h2>
+          <p class="muted">Backup blir vist som tekst. Kopier eller del teksten og lagre i OneDrive/Teams.</p>
+          <button id="makeBackupBtn" class="btn primary" type="button">Lag backuptekst</button>
+          <textarea id="backupText" rows="8" placeholder="Backuptekst kjem her..."></textarea>
+          <div class="button-row wrap">
+            <button id="copyBackupBtn" class="btn secondary" type="button">Kopier backup</button>
+            <button id="shareBackupBtn" class="btn secondary" type="button">Del / lagre backup</button>
+          </div>
+
+          <h3>Importer backup</h3>
+          <input id="backupFile" type="file" accept="application/json,.json,.txt" />
+          <textarea id="importText" rows="6" placeholder="Eller lim inn backuptekst her..."></textarea>
+          <button id="importBackupBtn" class="btn primary" type="button">Importer backup</button>
+        </div>
+
+        <div class="card danger-soft">
+          <h2>Nullstill app</h2>
+          <p>Dette slettar SJA, kundar, skadelogg og innstillingar på denne telefonen.</p>
+          <button id="resetAppBtn" class="btn danger" type="button">Tøm alle data</button>
+        </div>
+      </section>
+
+      <section id="screen-incident" class="screen">
+        <div class="card">
+          <h2>Skadelogg / hendelse</h2>
+          <label for="incidentDate">Dato</label>
+          <input id="incidentDate" type="date" />
+          <label for="incidentTime">Klokke</label>
+          <input id="incidentTime" type="time" />
+          <label for="incidentCustomer">Kunde / stad</label>
+          <input id="incidentCustomer" type="text" placeholder="Kunde eller stad" />
+          <label for="incidentWhat">Kva skjedde?</label>
+          <textarea id="incidentWhat" rows="3"></textarea>
+          <label for="incidentDamage">Kva skade / nestenulykke?</label>
+          <textarea id="incidentDamage" rows="3"></textarea>
+          <label for="incidentAction">Tiltak gjort etterpå</label>
+          <textarea id="incidentAction" rows="3"></textarea>
+          <label for="incidentReported">Meldt vidare?</label>
+          <select id="incidentReported">
+            <option value="Nei">Nei</option>
+            <option value="Ja">Ja</option>
+          </select>
+          <label for="incidentNote">Notat</label>
+          <textarea id="incidentNote" rows="3"></textarea>
+          <div class="button-row">
+            <button id="saveIncidentBtn" class="btn primary" type="button">Lagre logg</button>
+            <button class="btn secondary" type="button" data-go="home">Avbryt</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Bunnmeny">
+      <button class="nav-btn active" type="button" data-go="home">Heim</button>
+      <button class="nav-btn" type="button" data-go="sja">Ny SJA</button>
+      <button class="nav-btn" type="button" data-go="customers">Kundar</button>
+      <button class="nav-btn" type="button" data-go="archive">Arkiv</button>
+      <button class="nav-btn" type="button" data-go="report">Rapport</button>
+    </nav>
+  </div>
+
+  <div id="detailModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modalTitle">Detaljar</h2>
+        <button id="closeModalBtn" class="icon-btn" type="button">✕</button>
+      </div>
+      <div id="modalActions" class="button-row wrap modal-actions-top"></div>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
