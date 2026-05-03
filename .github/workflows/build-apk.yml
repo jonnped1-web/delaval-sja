@@ -1,0 +1,46 @@
+name: Build DeLaval SJA APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Hent repo
+        uses: actions/checkout@v4
+
+      - name: Pakk ut APK-prosjekt
+        run: |
+          unzip -o delaval_sja_apk_prosjekt_v1.zip -d work
+          PROJECT_DIR=$(find work -name settings.gradle -type f | head -n 1 | xargs dirname)
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          echo "Prosjektmappe: $PROJECT_DIR"
+
+      - name: Sett opp Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Sett opp Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Sett opp Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+
+      - name: Bygg debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleDebug --stacktrace
+
+      - name: Last opp APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: delaval-sja-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
