@@ -1059,17 +1059,15 @@ function openReportView(title, html, filenameHint = '') {
   $('modalTitle').textContent = title;
   $('modalActions').innerHTML = `
     <button class="btn secondary" type="button" id="modalBackFromReport">Tilbake</button>
-    <button class="btn primary" type="button" id="modalShareReportText">Del rapporttekst</button>
+    <button class="btn primary" type="button" id="modalDownloadPdf">Last ned PDF</button>
     <button class="btn secondary" type="button" id="modalCopyReport">Kopier tekst</button>
-    <button class="btn secondary" type="button" id="modalSharePdf">Del PDF</button>
-    <button class="btn secondary" type="button" id="modalDownloadPdf">Last ned PDF</button>
+    <button class="btn secondary" type="button" id="modalShareReportText">Del rapporttekst</button>
   `;
   $('modalContent').innerHTML = `<div class="report-view">${html}</div>`;
   $('detailModal').classList.remove('hidden');
   $('modalBackFromReport').onclick = closeModal;
   $('modalShareReportText').onclick = shareCurrentReportText;
   $('modalCopyReport').onclick = copyCurrentReportText;
-  $('modalSharePdf').onclick = shareCurrentReportPdf;
   $('modalDownloadPdf').onclick = downloadCurrentReportPdf;
 }
 
@@ -1280,8 +1278,12 @@ function makeSjaFormPdfStream(form) {
   const title = form.querySelector('.print-header h1')?.textContent.trim() || 'DeLaval SJA';
   const meta = Array.from(form.querySelectorAll('.print-meta div')).map(el => el.textContent.trim()).filter(Boolean);
 
+  const isIndexedSja = /^SJA\s+\d+$/i.test(title);
   stream += '0 0.35 0.67 rg\n';
-  stream += pdfTextCommand(pageLeft, pageTop, title, 15, 'F2');
+  stream += pdfTextCommand(pageLeft, pageTop, 'DeLaval SJA', 15, 'F2');
+  if (isIndexedSja) {
+    stream += pdfTextCommand(510, pageTop, title, 9, 'F2');
+  }
   stream += '0 0 0 rg\n';
   stream += pdfLineCommand(pageLeft, pageTop - 8, 567, pageTop - 8);
 
