@@ -939,6 +939,26 @@ function singleSjaPrintHtml(entry) {
 
 function sjaFormReportHtml(entry, index = null) {
   const actionItems = (entry.answers || []).filter(a => a.action && String(a.action).trim());
+  const rows = (entry.answers || []).map(a => {
+    const question = `${a.nr}. ${a.text}${a.note ? ` ${a.note}` : ''}`;
+    const value = a.value || '-';
+    const action = a.action || '';
+    return `
+      <tr class="sja-pdf-row"
+        data-nr="${escapeHtml(a.nr)}"
+        data-question="${escapeHtml(question)}"
+        data-value="${escapeHtml(value)}"
+        data-action="${escapeHtml(action)}">
+        <td class="sja-col-nr">${escapeHtml(a.nr)}</td>
+        <td>${escapeHtml(a.text)}${a.note ? `<div class="question-note">${escapeHtml(a.note)}</div>` : ''}</td>
+        <td class="sja-mark">${value === 'Ja' ? 'X' : ''}</td>
+        <td class="sja-mark">${value === 'Nei' ? 'X' : ''}</td>
+        <td class="sja-mark">${value === 'I/R' || value === 'Ikke relevant' ? 'X' : ''}</td>
+        <td class="sja-action-cell">${action ? escapeHtml(action) : ''}</td>
+      </tr>
+    `;
+  }).join('');
+
   return `
     <div class="print-doc sja-form-doc">
       <div class="print-header">
@@ -950,16 +970,19 @@ function sjaFormReportHtml(entry, index = null) {
           <div><strong>Arbeidsoppgåve:</strong> ${escapeHtml(entry.task)}</div>
         </div>
       </div>
-      <div class="sja-form-list">
-        ${(entry.answers || []).map(a => `
-          <div class="sja-form-question">
-            <div class="sja-form-title">${a.nr}. ${escapeHtml(a.text)}</div>
-            ${a.note ? `<div class="question-note">${escapeHtml(a.note)}</div>` : ''}
-            <div class="sja-form-answer">Svar: <strong>${escapeHtml(a.value || '-')}</strong></div>
-            ${a.action ? `<div class="print-note"><strong>Risiko håndtert / tiltak:</strong><br>${escapeHtml(a.action)}</div>` : ''}
-          </div>
-        `).join('')}
-      </div>
+      <table class="sja-pdf-table">
+        <thead>
+          <tr>
+            <th class="sja-col-nr">Nr</th>
+            <th>Kontrollpunkt</th>
+            <th>Ja</th>
+            <th>Nei</th>
+            <th>I/R</th>
+            <th>Risiko håndtert / tiltak</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
       <div class="sja-form-summary">
         <strong>Tiltak / avvik:</strong> ${actionItems.length ? `${actionItems.length} registrert` : 'Ingen tiltak registrert.'}
       </div>
@@ -984,19 +1007,41 @@ function incidentPrintHtml(item) {
     </div>`;
 }
 
+function sjaFormElementToPlainText(form) {
+  const title = form.querySelector('.print-header h1')?.textContent.trim() || 'DeLaval SJA';
+  const meta = Array.from(form.querySelectorAll('.print-meta div')).map(el => el.textContent.trim()).filter(Boolean);
+  const rows = Array.from(form.querySelectorAll('.sja-pdf-row')).map(row => {
+    const nr = row.getAttribute('data-nr') || '';
+    const question = row.getAttribute('data-question') || '';
+    const value = row.getAttribute('data-value') || '-';
+    const action = row.getAttribute('data-action') || '';
+    const lines = [`${nr}. ${question.replace(/^\d+\.\s*/, '')}`, `Svar: ${value}`];
+    if (action) lines.push(`Tiltak: ${action}`);
+    return lines.join('\n');
+  });
+
+  return [
+    title,
+    ...meta,
+    '',
+    'Kontrollpunkt:',
+    ...rows,
+    '',
+    form.querySelector('.sja-form-summary')?.textContent.trim() || ''
+  ].filter(Boolean).join('\n');
+}
+
 function htmlToPlainText(html) {
   const temp = document.createElement('div');
   temp.innerHTML = html;
 
-  // Full rapport: kvar lagra SJA skal starte på ny PDF-side.
-  // Dette blir brukt av den enkle PDF-generatoren og påverkar ikkje vanleg visning.
   const parts = [];
   const children = Array.from(temp.children);
   if (children.length) {
     children.forEach((child, index) => {
       const isSjaForm = child.classList && child.classList.contains('sja-form-doc');
       if (isSjaForm && index > 0 && parts.length) parts.push('\f');
-      const text = child.innerText.trim();
+      const text = isSjaForm ? sjaFormElementToPlainText(child) : child.innerText.trim();
       if (text) parts.push(text);
     });
     return parts.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -1117,6 +1162,200 @@ function binaryStringToBytes(str) {
   return bytes;
 }
 
+function pdfTextCommand(x, y, text, size = 8, font = 'F1') {
+  return `BT\n/${font} ${size} Tf\n${x} ${y} Td\n(${pdfEscapeText(text)}) Tj\nET\n`;
+}
+
+function pdfLineCommand(x1, y1, x2, y2) {
+  return `${x1} ${y1} m ${x2} ${y2} l S\n`;
+}
+
+function pdfRectCommand(x, y, w, h) {
+  return `${x} ${y} ${w} ${h} re S\n`;
+}
+
+function pdfWrapForWidth(text, width, fontSize) {
+  const approxCharWidth = fontSize * 0.48;
+  const maxChars = Math.max(8, Math.floor(width / approxCharWidth));
+  return wrapPdfLine(String(text || ''), maxChars);
+}
+
+function pdfTableText(stream, x, y, width, text, size = 6.2, maxLines = 3) {
+  const lines = pdfWrapForWidth(text, width, size).slice(0, maxLines);
+  lines.forEach((line, i) => {
+    stream.value += pdfTextCommand(x, y - (i * (size + 1.2)), line, size, 'F1');
+  });
+}
+
+function buildPdfFromPageStreams(pageStreams) {
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const objects = [];
+  const pageObjectNumbers = [];
+  const contentObjectNumbers = [];
+  const fontNormal = 3;
+  const fontBold = 4;
+  let nextObjectNumber = 5;
+
+  pageStreams.forEach(() => {
+    pageObjectNumbers.push(nextObjectNumber++);
+    contentObjectNumbers.push(nextObjectNumber++);
+  });
+
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[2] = `<< /Type /Pages /Kids [${pageObjectNumbers.map(n => `${n} 0 R`).join(' ')}] /Count ${pageStreams.length} >>`;
+  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+
+  pageStreams.forEach((stream, index) => {
+    const pageNo = pageObjectNumbers[index];
+    const contentNo = contentObjectNumbers[index];
+    objects[pageNo] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontNormal} 0 R /F2 ${fontBold} 0 R >> >> /Contents ${contentNo} 0 R >>`;
+    objects[contentNo] = `<< /Length ${stream.length} >>\nstream\n${stream}endstream`;
+  });
+
+  let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
+  const offsets = [0];
+  for (let i = 1; i < objects.length; i += 1) {
+    if (!objects[i]) continue;
+    offsets[i] = pdf.length;
+    pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (let i = 1; i < objects.length; i += 1) {
+    const offset = String(offsets[i] || 0).padStart(10, '0');
+    pdf += `${offset} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return new Blob([binaryStringToBytes(pdf)], { type: 'application/pdf' });
+}
+
+function makeSjaCoverPdfStream(cover, title) {
+  const lines = (cover?.innerText || title || 'DeLaval SJA rapport').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  let stream = '0 0 0 RG\n0 0 0 rg\n';
+  stream += pdfTextCommand(42, 790, lines[0] || title || 'DeLaval SJA rapport', 18, 'F2');
+  stream += pdfLineCommand(42, 775, 553, 775);
+  let y = 745;
+  lines.slice(1).forEach(line => {
+    pdfWrapForWidth(line, 490, 10).forEach(wrapped => {
+      stream += pdfTextCommand(42, y, wrapped, 10, 'F1');
+      y -= 16;
+    });
+    y -= 4;
+  });
+  return stream;
+}
+
+function makeSjaFormPdfStream(form) {
+  const pageLeft = 28;
+  const pageTop = 812;
+  const tableLeft = 28;
+  const tableWidth = 539;
+  const col = {
+    nr: 24,
+    question: 282,
+    ja: 28,
+    nei: 30,
+    ir: 28,
+    action: 147
+  };
+  const x = {
+    nr: tableLeft,
+    question: tableLeft + col.nr,
+    ja: tableLeft + col.nr + col.question,
+    nei: tableLeft + col.nr + col.question + col.ja,
+    ir: tableLeft + col.nr + col.question + col.ja + col.nei,
+    action: tableLeft + col.nr + col.question + col.ja + col.nei + col.ir
+  };
+  const rows = Array.from(form.querySelectorAll('.sja-pdf-row')).map(row => ({
+    nr: row.getAttribute('data-nr') || '',
+    question: row.getAttribute('data-question') || '',
+    value: row.getAttribute('data-value') || '-',
+    action: row.getAttribute('data-action') || ''
+  }));
+
+  let stream = '0 0 0 RG\n0 0 0 rg\n';
+  const title = form.querySelector('.print-header h1')?.textContent.trim() || 'DeLaval SJA';
+  const meta = Array.from(form.querySelectorAll('.print-meta div')).map(el => el.textContent.trim()).filter(Boolean);
+
+  stream += '0 0.35 0.67 rg\n';
+  stream += pdfTextCommand(pageLeft, pageTop, title, 15, 'F2');
+  stream += '0 0 0 rg\n';
+  stream += pdfLineCommand(pageLeft, pageTop - 8, 567, pageTop - 8);
+
+  const metaY1 = pageTop - 26;
+  const metaY2 = pageTop - 40;
+  stream += pdfTextCommand(pageLeft, metaY1, meta[0] || '', 8, 'F1');
+  stream += pdfTextCommand(205, metaY1, meta[1] || '', 8, 'F1');
+  stream += pdfTextCommand(pageLeft, metaY2, meta[2] || '', 8, 'F1');
+  stream += pdfTextCommand(205, metaY2, meta[3] || '', 8, 'F1');
+
+  const headerTop = pageTop - 66;
+  const headerHeight = 18;
+  stream += pdfRectCommand(tableLeft, headerTop - headerHeight, tableWidth, headerHeight);
+  stream += pdfLineCommand(x.question, headerTop, x.question, headerTop - headerHeight);
+  stream += pdfLineCommand(x.ja, headerTop, x.ja, headerTop - headerHeight);
+  stream += pdfLineCommand(x.nei, headerTop, x.nei, headerTop - headerHeight);
+  stream += pdfLineCommand(x.ir, headerTop, x.ir, headerTop - headerHeight);
+  stream += pdfLineCommand(x.action, headerTop, x.action, headerTop - headerHeight);
+  stream += pdfTextCommand(x.nr + 5, headerTop - 12, 'Nr', 7, 'F2');
+  stream += pdfTextCommand(x.question + 5, headerTop - 12, 'Kontrollpunkt', 7, 'F2');
+  stream += pdfTextCommand(x.ja + 8, headerTop - 12, 'Ja', 7, 'F2');
+  stream += pdfTextCommand(x.nei + 7, headerTop - 12, 'Nei', 7, 'F2');
+  stream += pdfTextCommand(x.ir + 7, headerTop - 12, 'I/R', 7, 'F2');
+  stream += pdfTextCommand(x.action + 5, headerTop - 12, 'Risiko håndtert / tiltak', 7, 'F2');
+
+  let y = headerTop - headerHeight;
+  rows.forEach(row => {
+    const qLines = pdfWrapForWidth(row.question.replace(/^\d+\.\s*/, ''), col.question - 8, 6.2).slice(0, 4);
+    const aLines = pdfWrapForWidth(row.action, col.action - 8, 6.2).slice(0, 4);
+    const lineCount = Math.max(qLines.length, aLines.length, 1);
+    const rowHeight = Math.max(22, 8 + (lineCount * 7.4));
+
+    stream += pdfRectCommand(tableLeft, y - rowHeight, tableWidth, rowHeight);
+    stream += pdfLineCommand(x.question, y, x.question, y - rowHeight);
+    stream += pdfLineCommand(x.ja, y, x.ja, y - rowHeight);
+    stream += pdfLineCommand(x.nei, y, x.nei, y - rowHeight);
+    stream += pdfLineCommand(x.ir, y, x.ir, y - rowHeight);
+    stream += pdfLineCommand(x.action, y, x.action, y - rowHeight);
+
+    const textY = y - 10;
+    stream += pdfTextCommand(x.nr + 7, textY, row.nr, 6.5, 'F2');
+    const qStream = { value: stream };
+    pdfTableText(qStream, x.question + 5, textY, col.question - 8, row.question.replace(/^\d+\.\s*/, ''), 6.2, 4);
+    pdfTableText(qStream, x.action + 5, textY, col.action - 8, row.action || '', 6.2, 4);
+    stream = qStream.value;
+
+    const markY = y - Math.max(14, rowHeight / 2 + 2);
+    if (row.value === 'Ja') stream += pdfTextCommand(x.ja + 11, markY, 'X', 8, 'F2');
+    if (row.value === 'Nei') stream += pdfTextCommand(x.nei + 12, markY, 'X', 8, 'F2');
+    if (row.value === 'I/R' || row.value === 'Ikke relevant') stream += pdfTextCommand(x.ir + 11, markY, 'X', 8, 'F2');
+
+    y -= rowHeight;
+  });
+
+  const summary = form.querySelector('.sja-form-summary')?.textContent.trim() || '';
+  stream += pdfTextCommand(tableLeft, Math.max(28, y - 18), summary, 7, 'F2');
+  return stream;
+}
+
+function makeSjaFormsPdfBlob(title, html) {
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  const forms = Array.from(temp.querySelectorAll('.sja-form-doc'));
+  if (!forms.length) return makeSimplePdfBlob(title, htmlToPlainText(html));
+
+  const pageStreams = [];
+  const cover = temp.querySelector('.report-cover');
+  if (cover && forms.length > 1) {
+    pageStreams.push(makeSjaCoverPdfStream(cover, title));
+  }
+  forms.forEach(form => pageStreams.push(makeSjaFormPdfStream(form)));
+  return buildPdfFromPageStreams(pageStreams);
+}
+
 function makeSimplePdfBlob(title, bodyText) {
   const pageWidth = 595;
   const pageHeight = 842;
@@ -1207,14 +1446,17 @@ function downloadBlob(blob, filename) {
 }
 
 function getCurrentPdf() {
-  const text = state.currentPrintText || htmlToPlainText(state.currentPrintHtml || '');
-  if (!text) {
+  const html = state.currentPrintHtml || '';
+  const text = state.currentPrintText || htmlToPlainText(html);
+  if (!text && !html) {
     toast('Ingen rapport å lage PDF av.');
     return null;
   }
   const filename = state.currentPdfFilename || makePdfFilename(state.currentPrintTitle || 'SJA rapport');
   if (!state.currentPdfBlob) {
-    state.currentPdfBlob = makeSimplePdfBlob(state.currentPrintTitle || 'SJA rapport', text);
+    state.currentPdfBlob = html.includes('sja-form-doc')
+      ? makeSjaFormsPdfBlob(state.currentPrintTitle || 'SJA rapport', html)
+      : makeSimplePdfBlob(state.currentPrintTitle || 'SJA rapport', text);
   }
   return { blob: state.currentPdfBlob, filename };
 }

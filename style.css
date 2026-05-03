@@ -689,30 +689,37 @@ input:focus, textarea:focus, select:focus {
   break-before: auto;
   page-break-before: auto;
 }
-.report-view .sja-form-list {
-  display: grid;
-  gap: 7px;
+.report-view .sja-pdf-table {
+  table-layout: fixed;
+  font-size: 0.68rem;
 }
-.report-view .sja-form-question {
+.report-view .sja-pdf-table th,
+.report-view .sja-pdf-table td {
   border: 1px solid #dfe5ea;
-  border-left: 4px solid var(--blue);
-  border-radius: 8px;
-  padding: 7px;
-  background: #fbfdff;
+  padding: 4px 3px;
+  vertical-align: top;
 }
-.report-view .sja-form-title {
-  font-weight: 800;
-  color: var(--blue-dark);
-  line-height: 1.3;
+.report-view .sja-pdf-table th {
+  background: #f1f6fb;
 }
-.report-view .sja-form-answer {
-  margin-top: 5px;
-  font-size: 0.9rem;
+.report-view .sja-col-nr {
+  width: 34px;
+  text-align: center;
+}
+.report-view .sja-mark {
+  width: 38px;
+  text-align: center;
+  font-weight: 900;
+}
+.report-view .sja-action-cell {
+  width: 24%;
+  font-size: 0.64rem;
 }
 .report-view .sja-form-summary {
-  margin-top: 10px;
-  padding: 8px;
+  margin-top: 8px;
+  padding: 6px;
   border-radius: 8px;
   background: #eef6ee;
   border: 1px solid #cfe5d0;
+  font-size: 0.82rem;
 }
